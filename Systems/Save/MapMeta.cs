@@ -19,7 +19,13 @@ public class MapMeta : MonoBehaviour {
         if (_cachedController == null) {
             _cachedController = FindAnyObjectByType<MapsController>();
         }
-        _cachedController?.StartMap(MapVariation, _fullMapName);
+        // StartMap ожидает: mapLocation (имя сцены Unity) и mapName (имя карты без расширения)
+        // MapLocation.text содержит локацию (например "Devs room"), которая должна быть именем сцены Unity
+        // MapName.text содержит имя карты без расширения и префикса
+        string mapName = MapName != null ? MapName.text : string.Empty;
+        string mapLocation = MapLocation != null ? MapLocation.text : MapVariation;
+        // Используем MapLocation.text как имя сцены (если оно установлено), иначе fallback на MapVariation
+        _cachedController?.StartMap(mapLocation, mapName);
     }
     
     public void MapDelete() {
