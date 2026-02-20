@@ -100,12 +100,11 @@
 // }
 using System;
 using System.Text;
-using System.Data;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using System.Collections;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
@@ -133,9 +132,9 @@ public class MapsController : MonoBehaviour {
             if (scene.name == currentMapLoc && !string.IsNullOrEmpty(currentMapName)) {
                 var loader = FindAnyObjectByType<SaveLoadManager>();
                 if (loader != null) {
-                    string fullPath = Path.Combine(mapsPath, $"{currentMapLoc}_{currentMapName}.mdm");
-                    // string password = passwordField?.text ?? "";
-                    // loader.MapLoad(fullPath, password);
+                    // Формат имени файла: SceneName_MapName.mdm
+                    string fileName = $"{SceneManager.GetActiveScene().name}_{currentMapName}.mdm";
+                    loader.LoadMap(currentMapName);
                 }
             }
         }
@@ -174,6 +173,7 @@ public class MapsController : MonoBehaviour {
         if (!Directory.Exists(mapsPath)) return;
 
         string[] mapFiles = Directory.GetFiles(mapsPath, "*.mdm");
+        if (mapFiles.Length == 0) return;
 
         foreach (string filePath in mapFiles) {
             string fileName = Path.GetFileNameWithoutExtension(filePath);
@@ -185,45 +185,51 @@ public class MapsController : MonoBehaviour {
             string mapVariation = fileName.Substring(0, underscore);
             string mapName = fileName.Substring(underscore + 1);
 
-            string version = null;
-
-            try {
-                using FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-                using Aes aes = Aes.Create();
-                aes.Key = Key;
-                aes.IV = IV;
-
-                using ICryptoTransform decryptor = aes.CreateDecryptor();
-                using CryptoStream cryptoStream = new CryptoStream(fs, decryptor, CryptoStreamMode.Read);
-                using GZipStream gz = new GZipStream(cryptoStream, CompressionMode.Decompress);
-                using BinaryReader reader = new BinaryReader(gz, Encoding.UTF8);
-
-                version = reader.ReadString();
-            }
-            catch (Exception e) {
-                Debug.LogError($"File Load/Decrypt Error ({fileName}): {e.Message}");
+            // Проверяем версию файла только для валидации
+            if (!ValidateMapFile(filePath)) {
+                Debug.LogWarning($"Invalid or corrupted map file: {fileName}");
                 continue;
             }
-
-            if (string.IsNullOrEmpty(version)) continue;
 
             LoadMapEntry(mapVariation, mapName);
         }
     }
 
+    private bool ValidateMapFile(string filePath) {
+        try {
+            using FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+            using Aes aes = Aes.Create();
+            aes.Key = Key;
+            aes.IV = IV;
+
+            using ICryptoTransform decryptor = aes.CreateDecryptor();
+            using CryptoStream cryptoStream = new CryptoStream(fs, decryptor, CryptoStreamMode.Read);
+            using GZipStream gz = new GZipStream(cryptoStream, CompressionMode.Decompress);
+            using BinaryReader reader = new BinaryReader(gz, Encoding.UTF8);
+
+            string version = reader.ReadString();
+            return !string.IsNullOrEmpty(version);
+        }
+        catch (Exception e) {
+            Debug.LogError($"File validation error: {e.Message}");
+            return false;
+        }
+    }
+
     private void LoadMapEntry(string mapVariation, string mapName) {
         string loc = VariationToLoaction(mapVariation);
-        Debug.Log("fg");
-        if (!int.TryParse(mapVariation, out int index))
-        {
-            Debug.Log("af," + index);    
+        
+        if (!int.TryParse(mapVariation, out int index)) {
             index = 0;
         } 
         if (index < 0 || index >= mapImages.Count) return;
 
         GameObject mapObject = Instantiate(mapPrefab, mapList);
         MapMeta mapComponent = mapObject.GetComponent<MapMeta>();
-        if (mapComponent == null) return;
+        if (mapComponent == null) {
+            Destroy(mapObject);
+            return;
+        }
 
         mapComponent.MapSet(mapName, loc, mapVariation, mapImages[index]);
     }
@@ -243,29 +249,33 @@ public class MapsController : MonoBehaviour {
                 Destroy(mapList.GetChild(i).gameObject);
             }
         }
-        public void WantToDeleteMap(string _mapToDelete) {
-            mapToDelete = _mapToDelete;
-            deletePanel.SetActive(true);
+        public void WantToDeleteMap(string mapToDeleteName) {
+            mapToDelete = mapToDeleteName;
+            if (deletePanel != null) deletePanel.SetActive(true);
         }
         public void DeleteMap() {
-            StartCoroutine(DeleteMapCoroutine());
+            DeleteMapAsync().Forget();
         }
-        private IEnumerator DeleteMapCoroutine() {
-            yield return StartCoroutine(DeleteFile());
+        private async UniTaskVoid DeleteMapAsync() {
+            await DeleteFileAsync();
             RefreshMapsList();
-            deletePanel.SetActive(false);
+            if (deletePanel != null) deletePanel.SetActive(false);
         }
-        private IEnumerator DeleteFile() {
-            if (!string.IsNullOrEmpty(mapToDelete)) {
-                string _mapFullPath = Path.Combine(mapsPath, mapToDelete);
-                if (File.Exists(_mapFullPath)) File.Delete(_mapFullPath);
+        private async UniTask DeleteFileAsync() {
+            if (string.IsNullOrEmpty(mapToDelete)) return;
+            
+            await UniTask.SwitchToThreadPool();
+            string mapFullPath = Path.Combine(mapsPath, mapToDelete);
+            if (File.Exists(mapFullPath)) {
+                File.Delete(mapFullPath);
             }
-            yield return null;
+            await UniTask.SwitchToMainThread();
         }
     #endregion
-    public void StartMap(string _mapLocation, string _mapName) {
-        currentMapLoc = _mapLocation;
-        currentMapName = _mapName;
-        SceneManager.LoadScene(_mapName);
+    public void StartMap(string mapLocation, string mapName) {
+        currentMapLoc = mapLocation;
+        currentMapName = mapName;
+        // Загружаем сцену по локации, а не по имени карты
+        SceneManager.LoadScene(mapLocation);
     }
 }

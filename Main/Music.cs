@@ -6,9 +6,10 @@
 // using UnityEngine.Audio;
 // using TMPro;
 
+using Cysharp.Threading.Tasks;
 using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Threading;
 using UnityEngine;
 using TMPro;
 
@@ -26,45 +27,56 @@ namespace EPC {
         [SerializeField] private List<ClipData> clips = new List<ClipData>();
         [SerializeField] private int clipCur = 0;
         [SerializeField] private AudioSource source;
-        private Coroutine musicCoroutine;
+        
+        private CancellationTokenSource _cts;
+
+        private void OnDestroy() {
+            _cts?.Cancel();
+            _cts?.Dispose();
+        }
 
         private void Start() {
-            if (clips.Count > 0) PlayTrack(clipCur);
+            if (clips.Count > 0) PlayTrack(clipCur).Forget();
         }
 
         public void ClipChange(int input) {
             clipCur += input;
             ValidateIndex();
 
-            int _i = 0;
-            while (!clips[clipCur].can_play && _i < clips.Count) {
+            int attempts = 0;
+            while (!clips[clipCur].can_play && attempts < clips.Count) {
                 clipCur = (clipCur + 1) % clips.Count;
-                _i++;
+                attempts++;
             }
 
-            if (clips[clipCur].can_play) PlayTrack(clipCur);
+            if (clips[clipCur].can_play) PlayTrack(clipCur).Forget();
             else Debug.LogWarning("No Tracks!");
         }
 
-        private void PlayTrack(int index) {
-            if (musicCoroutine != null) StopCoroutine(musicCoroutine);
+        private async UniTaskVoid PlayTrack(int index) {
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(this.GetCancellationTokenOnDestroy());
             
             ClipData track = clips[index];
             source.clip = track.audio;
             source.Play();
 
-            if (clipNameTxt is not null) clipNameTxt.text = track.name;
-            if (clipAuthorTxt is not null) clipAuthorTxt.text = $"- {track.author} -";
+            if (clipNameTxt != null) clipNameTxt.text = track.name;
+            if (clipAuthorTxt != null) clipAuthorTxt.text = $"- {track.author} -";
 
-            musicCoroutine = StartCoroutine(WaitAndNext());
+            await WaitForTrackEnd(_cts.Token);
+            if (!_cts.Token.IsCancellationRequested) ClipChange(1);
         }
 
-        private IEnumerator WaitAndNext() {
+        private async UniTask WaitForTrackEnd(CancellationToken token) {
+            if (source.clip == null) return;
+            
+            float checkInterval = 0.1f;
             while (source.clip != null && source.time < source.clip.length - 0.1f) {
-                yield return new WaitForSeconds(1f); 
+                await UniTask.Delay(TimeSpan.FromSeconds(checkInterval), cancellationToken: token);
             }
-            yield return new WaitForSeconds(1f);
-            ClipChange(1);
+            await UniTask.Delay(TimeSpan.FromSeconds(1f), cancellationToken: token);
         }
 
         private void ValidateIndex() {

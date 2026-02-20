@@ -1,5 +1,6 @@
-using System.Collections;
-using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+using System;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -28,8 +29,7 @@ public class HealthSystem : MonoBehaviour {
     [SerializeField] private float _healthCurrent;
     private bool isDead;
 
-    private Coroutine _regenCoroutine;
-    // private bool _isRegenerating = false;
+    private CancellationTokenSource _regenCts;
 
     public event System.Action OnDeath;
     public event System.Action<float> OnDamageTaken;
@@ -47,38 +47,32 @@ public class HealthSystem : MonoBehaviour {
             RenderHealth();
         }
         private void StartRegeneration() {
-            if (_regenCoroutine != null) StopCoroutine(_regenCoroutine);
-            _regenCoroutine = StartCoroutine(RegenerationProcess());
+            _regenCts?.Cancel();
+            _regenCts?.Dispose();
+            _regenCts = CancellationTokenSource.CreateLinkedTokenSource(this.GetCancellationTokenOnDestroy());
+            RegenerationProcess(_regenCts.Token).Forget();
         }
 
-        private IEnumerator RegenerationProcess() {
-            // _isRegenerating = true;
-        
-            float waitTimer = 0f;
-            while (waitTimer < _healthSettings.healthRegenDelay && !isDead) {
-                waitTimer += Time.deltaTime;
-                yield return null;
+        private async UniTaskVoid RegenerationProcess(CancellationToken token) {
+            try {
+                await UniTask.Delay(TimeSpan.FromSeconds(_healthSettings.healthRegenDelay), cancellationToken: token);
+                
+                while (_healthCurrent < _healthSettings.healthMax && !isDead && !token.IsCancellationRequested) {
+                    _healthCurrent += _healthSettings.healthRegen * Time.deltaTime;
+                    _healthCurrent = Mathf.Min(_healthCurrent, _healthSettings.healthMax);
+                    RenderHealth();
+                    await UniTask.Yield(PlayerLoopTiming.Update, token);
+                }
             }
-        
-            while (_healthCurrent < _healthSettings.healthMax && !isDead) {
-                _healthCurrent += _healthSettings.healthRegen * Time.deltaTime;
-                _healthCurrent = Mathf.Min(_healthCurrent, _healthSettings.healthMax);
-            
-                RenderHealth();
-                // OnHealthChanged?.Invoke(HealthPercent);
-            
-                yield return null;
+            catch (OperationCanceledException) {
+                // Игнорируем отмену
             }
-        
-            // _isRegenerating = false;
         }
     
         public void StopRegeneration() {
-            if (_regenCoroutine != null) {
-                StopCoroutine(_regenCoroutine);
-                _regenCoroutine = null;
-            }
-            // _isRegenerating = false;
+            _regenCts?.Cancel();
+            _regenCts?.Dispose();
+            _regenCts = null;
         }
         public void Heal(float amount) {
             if (isDead) return;

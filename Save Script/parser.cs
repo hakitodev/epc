@@ -1,28 +1,34 @@
+using System.Text;
 using UnityEngine;
 
 namespace EPC {
     public class parser : MonoBehaviour {
-        [SerializeField] private int key;
-        private int code = -1;
+        [SerializeField] private int key = -1;
+        
         public string encode_text(string txt, int k) {
-            if (key != -1) code = key;
-            else code = (k == 0 || k == 1) ? 1 : k;
-            string res = "";
+            if (string.IsNullOrEmpty(txt)) return string.Empty;
+            
+            int code = key != -1 ? key : (k == 0 || k == 1 ? 1 : k);
+            StringBuilder sb = new StringBuilder(txt.Length);
+            
             for (int i = 0; i < txt.Length; i++) {
-                res += (char)(txt[i] ^ code);
+                sb.Append((char)(txt[i] ^ code));
             }
-            code = -1;
-            return res;
+            
+            return sb.ToString();
         }
+        
         public string decode_text(string txt, int k) {
-            if (key != -1) code = key;
-            else code = (k == 0 || k == 1) ? 1 : k;
-            string res = "";
+            if (string.IsNullOrEmpty(txt)) return string.Empty;
+            
+            int code = key != -1 ? key : (k == 0 || k == 1 ? 1 : k);
+            StringBuilder sb = new StringBuilder(txt.Length);
+            
             for (int i = 0; i < txt.Length; i++) {
-                res += (char)(txt[i] ^ code);
+                sb.Append((char)(txt[i] ^ code));
             }
-            code = -1;
-            return res;
+            
+            return sb.ToString();
         }
     }
 }

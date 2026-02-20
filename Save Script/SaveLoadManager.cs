@@ -2,13 +2,12 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using System.Collections;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.Text;
-using System.Data;
 using TMPro;
 
 public class PropInfo : MonoBehaviour {
@@ -43,7 +42,11 @@ public class SaveLoadManager : MonoBehaviour {
     private void CacheAllPrefabs() {
         GameObject[] prefabs = Resources.LoadAll<GameObject>(resourcesFolder);
         foreach (var p in prefabs) {
-            prefabCache[Int16.Parse(p.name)] = p;
+            if (short.TryParse(p.name, out short prefabId)) {
+                prefabCache[prefabId] = p;
+            } else {
+                Debug.LogWarning($"Failed to parse prefab ID from name: {p.name}");
+            }
         }
     }
     public void SaveCurrentMap() {
@@ -74,8 +77,12 @@ public class SaveLoadManager : MonoBehaviour {
                             GameObject obj = child.gameObject;
                             if (obj == null) continue;
                                         
-                            short _cleanName = Int16.Parse(obj.name.Replace("(Clone)", "").Trim()); 
-                            writer.Write(_cleanName);
+                            string cleanName = obj.name.Replace("(Clone)", "").Trim();
+                            if (!short.TryParse(cleanName, out short prefabId)) {
+                                Debug.LogWarning($"Failed to parse prefab ID from object name: {obj.name}, skipping...");
+                                continue;
+                            }
+                            writer.Write(prefabId);
 
                             writer.Write(obj.transform.position.x);
                             writer.Write(obj.transform.position.y);
@@ -128,25 +135,27 @@ public class SaveLoadManager : MonoBehaviour {
         }
     }
 
-    public void LoadMap(string _mapFileName) {
-        if (_mapFileName == null && string.IsNullOrEmpty(_mapFileName)) return;
-        // if (string.IsNullOrEmpty(_mapFileName)) return;
+    public void LoadMap(string mapFileName) {
+        if (string.IsNullOrEmpty(mapFileName)) return;
         
-        string fileName = $"{SceneManager.GetActiveScene().name}_{_mapFileName.Replace(".mdm", "")}.mdm";
-        StartCoroutine(LoadMapCoroutine(fileName));
+        string fileName = $"{SceneManager.GetActiveScene().name}_{mapFileName.Replace(".mdm", "")}.mdm";
+        LoadMapAsync(fileName).Forget();
     }
-    public IEnumerator LoadMapCoroutine(string mapFileName) {
+    
+    private async UniTaskVoid LoadMapAsync(string mapFileName) {
         string filePath = Path.Combine(saveDirectory, mapFileName);
         
         if (!File.Exists(filePath)) {
             Debug.LogError($"File Didn't Exist: {filePath}");
-            yield break;
+            return;
         }
 
         ClearAllProps();
         List<PropMeta> allData = new List<PropMeta>();
 
         try {
+            await UniTask.SwitchToThreadPool();
+            
             using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read)) {
                 using (Aes aes = Aes.Create()) {
                     aes.Key = Key;
@@ -184,10 +193,12 @@ public class SaveLoadManager : MonoBehaviour {
                     }
                 }
             }
+            
+            await UniTask.SwitchToMainThread();
         }
         catch (Exception e) {
             Debug.LogError($"File Load/Decrypt Error: {e.Message}");
-            yield break;
+            return;
         }
 
         loadProgress = 0f;
@@ -199,7 +210,7 @@ public class SaveLoadManager : MonoBehaviour {
                 loaded++;
             }
             loadProgress = (float)loaded / allData.Count;
-            yield return null;
+            await UniTask.Yield();
         }
 
         allData.Clear();
@@ -265,8 +276,14 @@ public class SaveLoadManager : MonoBehaviour {
     public PropMeta GetCurrentPropData(GameObject obj) {
         if (obj == null || !IsPropContains(obj)) return null;
 
+        string cleanName = obj.name.Replace("(Clone)", "").Trim();
+        if (!short.TryParse(cleanName, out short prefabId)) {
+            Debug.LogWarning($"Failed to parse prefab ID from object name: {obj.name}");
+            return null;
+        }
+
         PropMeta data = new PropMeta {
-            PrefabName = Int16.Parse(obj.name),
+            PrefabName = prefabId,
             Position = obj.transform.position,
             Rotation = obj.transform.eulerAngles,
             Scale = obj.transform.localScale

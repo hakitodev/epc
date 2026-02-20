@@ -1,4 +1,6 @@
-using System.Collections;
+using Cysharp.Threading.Tasks;
+using System;
+using System.Threading;
 using UnityEngine;
 
 [System.Serializable]
@@ -23,11 +25,16 @@ public class StaminaSystem : MonoBehaviour {
     
     [SerializeField] private float _currentStamina;
     private bool _isExhausted = false;
-    private Coroutine _staminaCoroutine;
+    private CancellationTokenSource _staminaCts;
     private bool _isDraining = false;
     
     public event System.Action<float> OnStaminaChanged;
     public event System.Action<bool> OnExhaustedStateChanged;
+
+    private void OnDestroy() {
+        _staminaCts?.Cancel();
+        _staminaCts?.Dispose();
+    }
     
     public float CurrentStamina => _currentStamina;
     public float MaxStamina => _settings.maxStamina;
@@ -64,51 +71,67 @@ public class StaminaSystem : MonoBehaviour {
         private void StartDraining(float drainRate){
             _isDraining = true;
             
-            if (_staminaCoroutine != null) StopCoroutine(_staminaCoroutine);
+            _staminaCts?.Cancel();
+            _staminaCts?.Dispose();
+            _staminaCts = CancellationTokenSource.CreateLinkedTokenSource(this.GetCancellationTokenOnDestroy());
                 
-            _staminaCoroutine = StartCoroutine(DrainStaminaCoroutine(drainRate));
+            DrainStaminaAsync(drainRate, _staminaCts.Token).Forget();
         }
         
         private void StartRegeneration() {
-            if (_staminaCoroutine != null) StopCoroutine(_staminaCoroutine);
+            _staminaCts?.Cancel();
+            _staminaCts?.Dispose();
+            _staminaCts = CancellationTokenSource.CreateLinkedTokenSource(this.GetCancellationTokenOnDestroy());
                 
-            _staminaCoroutine = StartCoroutine(RegenerateStaminaCoroutine());
+            RegenerateStaminaAsync(_staminaCts.Token).Forget();
         }
-        private IEnumerator DrainStaminaCoroutine(float drainRate) {
-            while (_isDraining && _currentStamina > 0 && !_settings.infiniteStamina) {
-                _currentStamina -= drainRate * Time.deltaTime;
-                _currentStamina = Mathf.Max(0, _currentStamina);
-                
-                OnStaminaChanged?.Invoke(_currentStamina / _settings.maxStamina);
+        
+        private async UniTaskVoid DrainStaminaAsync(float drainRate, CancellationToken token) {
+            try {
+                while (_isDraining && _currentStamina > 0 && !_settings.infiniteStamina && !token.IsCancellationRequested) {
+                    _currentStamina -= drainRate * Time.deltaTime;
+                    _currentStamina = Mathf.Max(0, _currentStamina);
+                    
+                    OnStaminaChanged?.Invoke(_currentStamina / _settings.maxStamina);
+                    
+                    if (_currentStamina <= 0 && !_isExhausted) {
+                        _isExhausted = true;
+                        OnExhaustedStateChanged?.Invoke(true);
+                    }
+                    
+                    await UniTask.Yield(PlayerLoopTiming.Update, token);
+                }
                 
                 if (_currentStamina <= 0 && !_isExhausted) {
                     _isExhausted = true;
                     OnExhaustedStateChanged?.Invoke(true);
                 }
-                
-                yield return null;
             }
-            
-            if (_currentStamina <= 0) {
-                _isExhausted = true;
-                OnExhaustedStateChanged?.Invoke(true);
+            catch (OperationCanceledException) {
+                // Игнорируем отмену
             }
         }
-        private IEnumerator RegenerateStaminaCoroutine() {
-            yield return new WaitForSeconds(_settings.staminaRegenDelay);
-            
-            while (_currentStamina < _settings.maxStamina && !_isDraining) {
-                _currentStamina += _settings.staminaRegen * Time.deltaTime;
-                _currentStamina = Mathf.Min(_currentStamina, _settings.maxStamina);
+        
+        private async UniTaskVoid RegenerateStaminaAsync(CancellationToken token) {
+            try {
+                await UniTask.Delay(TimeSpan.FromSeconds(_settings.staminaRegenDelay), cancellationToken: token);
                 
-                OnStaminaChanged?.Invoke(_currentStamina / _settings.maxStamina);
-                
-                if (_isExhausted && _currentStamina >= _settings.maxStamina * 0.3f) {
-                    _isExhausted = false;
-                    OnExhaustedStateChanged?.Invoke(false);
+                while (_currentStamina < _settings.maxStamina && !_isDraining && !token.IsCancellationRequested) {
+                    _currentStamina += _settings.staminaRegen * Time.deltaTime;
+                    _currentStamina = Mathf.Min(_currentStamina, _settings.maxStamina);
+                    
+                    OnStaminaChanged?.Invoke(_currentStamina / _settings.maxStamina);
+                    
+                    if (_isExhausted && _currentStamina >= _settings.maxStamina * 0.3f) {
+                        _isExhausted = false;
+                        OnExhaustedStateChanged?.Invoke(false);
+                    }
+                    
+                    await UniTask.Yield(PlayerLoopTiming.Update, token);
                 }
-                
-                yield return null;
+            }
+            catch (OperationCanceledException) {
+                // Игнорируем отмену
             }
         }
     #endregion

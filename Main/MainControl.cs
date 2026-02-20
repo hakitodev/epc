@@ -8,17 +8,23 @@ namespace EPC {
     public class MainControl : MonoBehaviour {
         public static MainControl I;
         private void Awake() => I = this;
-        public void PanelRendTime(GameObject targetPanel, float _duration = 1.25f) => 
-            PanelTimerAsync(targetPanel,this.GetCancellationTokenOnDestroy(), _duration).Forget() ;
+        public void PanelRendTime(GameObject targetPanel, float duration = 1.25f) => 
+            PanelTimerAsync(targetPanel, this.GetCancellationTokenOnDestroy(), duration).Forget();
         public void PanelRendTime(GameObject targetPanel) =>
             PanelTimerAsync(targetPanel, this.GetCancellationTokenOnDestroy()).Forget();
-        private async UniTask PanelTimerAsync(GameObject panel, CancellationToken token, float _duration = 1.25f) {
+        
+        private async UniTask PanelTimerAsync(GameObject panel, CancellationToken token, float duration = 1.25f) {
             if (panel == null) return;
-            
+
             panel.SetActive(true);
-            await UniTask.Delay(TimeSpan.FromSeconds(_duration), cancellationToken: token);
-            
-            panel.SetActive(false);
+
+            try {
+                await UniTask.Delay(TimeSpan.FromSeconds(duration), cancellationToken: token);
+                if (panel != null) panel.SetActive(false);
+            }
+            catch (OperationCanceledException) {
+                // Игнорируем отмену
+            }
         }
 
         public void PanelToggle(GameObject panel) {
@@ -57,6 +63,7 @@ namespace EPC {
         //         Debug.Log("Pos & QRot canceled");
         //     }
         // }
+        // Оставлено для обратной совместимости, но рекомендуется использовать твины напрямую
         public async UniTask MoveAndRotateAsync(Transform target, Vector3 endPos, Quaternion endRot, float duration, CancellationToken token) {
             if (target == null) return;
 
@@ -68,20 +75,21 @@ namespace EPC {
             Vector3 startPos = target.position;
             Quaternion startRot = target.rotation;
             float elapsed = 0f;
+            float invDuration = 1f / duration;
 
             while (elapsed < duration) {
                 if (token.IsCancellationRequested || target == null) return;
 
                 elapsed += Time.deltaTime;
-                float t = elapsed / duration;
-                t = t * t * (3f - 2f * t);
+                float t = Mathf.Clamp01(elapsed * invDuration);
+                t = t * t * (3f - 2f * t); // SmoothStep
 
                 target.SetPositionAndRotation(
-                    Vector3.Lerp(startPos, endPos, t),
-                    Quaternion.Slerp(startRot, endRot, t)
+                    Vector3.LerpUnclamped(startPos, endPos, t),
+                    Quaternion.SlerpUnclamped(startRot, endRot, t)
                 );
 
-                await UniTask.Yield(PlayerLoopTiming.Update);
+                await UniTask.Yield(PlayerLoopTiming.Update, token);
             }
 
             if (target != null) target.SetPositionAndRotation(endPos, endRot);

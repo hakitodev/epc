@@ -21,29 +21,28 @@ public class InventoryController : MonoBehaviour {
         else SelectFirstAvailable();
     }
 
-    public void SwitchWeapon(int _index) {
-        if (_index < 0 || _index >= weapons.Count || _index == index) index = 0;
-        if (!weapons[_index].IsGoted) {
-            Debug.Log($"{weapons[_index].Name} didn't goted!");
+    public void SwitchWeapon(int newIndex) {
+        if (newIndex < 0 || newIndex >= weapons.Count || newIndex == index) return;
+        if (!weapons[newIndex].IsGoted) {
+            Debug.Log($"{weapons[newIndex].Name} didn't goted!");
             return;
         }
         
-        ActivateWeapon(_index);
+        ActivateWeapon(newIndex);
     }
 
-    private void ActivateWeapon(int _index) {
+    private void ActivateWeapon(int newIndex) {
         if (currentWeapon != null) {
-            if (currentWeapon.WeaponObj) currentWeapon.WeaponObj.SetActive(false);
-            if (currentWeapon.WeaponPanel) currentWeapon.WeaponPanel.SetActive(false);
+            if (currentWeapon.WeaponObj != null) currentWeapon.WeaponObj.SetActive(false);
+            if (currentWeapon.WeaponPanel != null) currentWeapon.WeaponPanel.SetActive(false);
         }
 
-        if (weapons[_index] is { } _selected) {
-            if (_selected.WeaponObj) _selected.WeaponObj.SetActive(true);
-            if (_selected.WeaponPanel) _selected.WeaponPanel.SetActive(true);
-            
-            currentWeapon = _selected;
-            index = _index;
-        }
+        var selected = weapons[newIndex];
+        if (selected.WeaponObj != null) selected.WeaponObj.SetActive(true);
+        if (selected.WeaponPanel != null) selected.WeaponPanel.SetActive(true);
+        
+        currentWeapon = selected;
+        index = newIndex;
     }
 
     private void SelectFirstAvailable() {

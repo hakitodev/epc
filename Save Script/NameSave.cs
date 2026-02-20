@@ -33,8 +33,12 @@ public class NameSave : MonoBehaviour
 
     public void SaveName()
     {
-        MyText.text = _InputField.text;
-        PlayerName = MyText.text.ToString();
+        if (_InputField == null) return;
+        
+        PlayerName = _InputField.text;
+        if (MyText != null) {
+            MyText.text = PlayerName;
+        }
         SaveDataName();
     }
 }

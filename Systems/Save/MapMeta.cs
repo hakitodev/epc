@@ -7,19 +7,33 @@ public class MapMeta : MonoBehaviour {
     [SerializeField] private TMP_Text MapLocation;
     [SerializeField] private string MapVariation;
     [SerializeField] private Image MapIcon;
+    
+    private MapsController _cachedController;
+    private string _fullMapName;
+
+    private void Awake() {
+        _cachedController = FindAnyObjectByType<MapsController>();
+    }
 
     public void MapLoad() {
-        var _mapsController = GameObject.FindAnyObjectByType<MapsController>();
-        _mapsController.StartMap(MapLocation.text, MapVariation);
+        if (_cachedController == null) {
+            _cachedController = FindAnyObjectByType<MapsController>();
+        }
+        _cachedController?.StartMap(MapVariation, _fullMapName);
     }
+    
     public void MapDelete() {
-        MapsController _mapsController = GameObject.FindAnyObjectByType<MapsController>();
-        _mapsController.WantToDeleteMap($"{MapLocation.text}_{MapName.text}.mdm");
+        if (_cachedController == null) {
+            _cachedController = FindAnyObjectByType<MapsController>();
+        }
+        _cachedController?.WantToDeleteMap(_fullMapName);
     }
-    public void MapSet(string _mapName, string _mapLocation, string _mapVariation, Sprite _mapIcon) {
-        MapName.text = _mapName;
-        MapLocation.text = _mapLocation;
-        MapIcon.sprite = _mapIcon;
-        MapVariation = _mapVariation;
+    
+    public void MapSet(string mapName, string mapLocation, string mapVariation, Sprite mapIcon) {
+        if (MapName != null) MapName.text = mapName;
+        if (MapLocation != null) MapLocation.text = mapLocation;
+        if (MapIcon != null) MapIcon.sprite = mapIcon;
+        MapVariation = mapVariation;
+        _fullMapName = $"{mapVariation}_{mapName}.mdm";
     }
 }
