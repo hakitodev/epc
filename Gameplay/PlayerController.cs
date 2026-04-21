@@ -112,7 +112,6 @@ public class PlayerController : MonoBehaviour {
 
     [SerializeField] private Vector3 _velocity;
     private Vector3 _moveDirection;
-    // Кешированные переменные для избежания аллокаций
     private Vector3 _tempHorizontalVelocity;
     private Vector3 _tempCameraForward;
     private Vector3 _tempCameraRight;
@@ -352,7 +351,6 @@ public class PlayerController : MonoBehaviour {
                 _moveInput = moveInput;
             }
             
-            // Публичный метод для прямого подключения джойстика из UI
             public void SetJoystickInput(float horizontal, float vertical) {
                 _moveInput.x = horizontal;
                 _moveInput.y = vertical;

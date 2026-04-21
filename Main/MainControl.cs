@@ -1,40 +1,76 @@
-using Cysharp.Threading.Tasks;
 using System;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Cysharp.Threading.Tasks;
 
-namespace EPC {
-    public class MainControl : MonoBehaviour {
-        public static MainControl I;
-        private void Awake() => I = this;
-        public void PanelRendTime(GameObject targetPanel, float duration = 1.25f) => 
+namespace Hakito
+{
+    public class MainControl : MonoBehaviour
+    {
+        public static MainControl Instance;
+
+        private void Awake()
+        {
+            Instance = this;
+        }
+
+        public void Log(string str)
+        {
+            Debug.Log(str);
+        }
+
+        public void RenderPanelByTime(GameObject targetPanel, float duration = 1f)
+        {
             PanelTimerAsync(targetPanel, this.GetCancellationTokenOnDestroy(), duration).Forget();
-        public void PanelRendTime(GameObject targetPanel) =>
+        }
+
+        public void RenderPanelByTime(GameObject targetPanel)
+        {
             PanelTimerAsync(targetPanel, this.GetCancellationTokenOnDestroy()).Forget();
-        
-        private async UniTask PanelTimerAsync(GameObject panel, CancellationToken token, float duration = 1.25f) {
-            if (panel == null) return;
+        }
+
+        private async UniTask PanelTimerAsync(GameObject panel, CancellationToken token, float duration = 1f)
+        {
+            if (panel == null)
+            {
+                return;
+            }
 
             panel.SetActive(true);
 
-            try {
+            try
+            {
                 await UniTask.Delay(TimeSpan.FromSeconds(duration), cancellationToken: token);
                 if (panel != null) panel.SetActive(false);
             }
-            catch (OperationCanceledException) {
-                // Игнорируем отмену
+            catch (OperationCanceledException) { }
+        }
+
+        public void TogglePanel(GameObject panel)
+        {
+            if (panel != null)
+            {
+                panel.SetActive(!panel.activeSelf);
             }
         }
 
-        public void PanelToggle(GameObject panel) {
-            if (panel != null) panel.SetActive(!panel.activeSelf);
-        }
+        #region Scenes
 
-        public void LoadScene(string sceneName) {
+        public static void LoadScene(string sceneName)
+        {
             SceneManager.LoadScene(sceneName);
             Debug.Log($"Loaded Scene: {sceneName}");
         }
+
+        public static async UniTask LoadSceneAsync(string value)
+        {
+            var sceneToLoad = SceneManager.LoadSceneAsync(value);
+
+            await UniTask.WaitUntil(() => sceneToLoad.isDone);
+        }
+
+        #endregion
 
         // public async UniTask MoveAndRotateAsync(Transform target, Vector3 endPos, Quaternion endRot, float duration, CancellationToken token) {
         //     if (target == null) return;
@@ -63,11 +99,15 @@ namespace EPC {
         //         Debug.Log("Pos & QRot canceled");
         //     }
         // }
-        // Оставлено для обратной совместимости, но рекомендуется использовать твины напрямую
-        public async UniTask MoveAndRotateAsync(Transform target, Vector3 endPos, Quaternion endRot, float duration, CancellationToken token) {
-            if (target == null) return;
+        public async UniTask MoveAndRotateAsync(Transform target, Vector3 endPos, Quaternion endRot, float duration, CancellationToken token)
+        {
+            if (target == null)
+            {
+                return;
+            }
 
-            if (duration <= 0f) {
+            if (duration <= 0f)
+            {
                 target.SetPositionAndRotation(endPos, endRot);
                 return;
             }
@@ -77,12 +117,12 @@ namespace EPC {
             float elapsed = 0f;
             float invDuration = 1f / duration;
 
-            while (elapsed < duration) {
+            while (elapsed < duration)
+            {
                 if (token.IsCancellationRequested || target == null) return;
 
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed * invDuration);
-                t = t * t * (3f - 2f * t); // SmoothStep
 
                 target.SetPositionAndRotation(
                     Vector3.LerpUnclamped(startPos, endPos, t),
@@ -92,21 +132,39 @@ namespace EPC {
                 await UniTask.Yield(PlayerLoopTiming.Update, token);
             }
 
-            if (target != null) target.SetPositionAndRotation(endPos, endRot);
+            if (target != null)
+            {
+                target.SetPositionAndRotation(endPos, endRot);
+            }
         }
 
-        public void OpenUrl(string url) {
-            if (!string.IsNullOrEmpty(url)) Application.OpenURL(url);
-            else Debug.LogWarning("Link is Empty!");
+        public static void OpenUrl(string url)
+        {
+            if (!string.IsNullOrEmpty(url))
+            {
+                Application.OpenURL(url);
+            }
+            else
+            {
+                Debug.LogWarning("Link is Empty!");
+            }
         }
-        public void OpenDiscord() => OpenUrl("https://discord.gg/DVPJV6TgVB");
-        public void OpenTelegram() => OpenUrl("https://t.me/epicvoidcorp");
+        public static void OpenDiscord()
+        {
+            OpenUrl("https://discord.gg/DVPJV6TgVB");
+        }
 
-        public void GameExit() {
-            Debug.Log("Game Extt");
-            #if UNITY_EDITOR
-                UnityEditor.EditorApplication.isPlaying = false;
-            #endif
+        public static void OpenTelegram()
+        {
+            OpenUrl("https://t.me/epicvoidcorp");
+        }
+
+        public static void GameExit()
+        {
+            Debug.Log("Game Exit");
+            // #if UNITY_EDITOR
+            //     UnityEditor.EditorApplication.isPlaying = false;
+            // #endif
             Application.Quit();
         }
     }

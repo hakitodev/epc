@@ -5,24 +5,24 @@ using UnityEngine;
 
 public class ai_fpc : MonoBehaviour
 {
-    public bool idle, agressive, walking;
+    public enum State { idle, agressive, walking }
     public bool can_m;
-    public bool sword, gun;
+    public enum AttackType { sword, gun }
     public float speed;
-    public List<GameObject> enemys = new List<GameObject>();
+    public List<GameObject> enemies = new List<GameObject>(4);
     [SerializeField] private Vector3 move;
     public int mult;
     public Vector3 dir;
-    [SerializeField] float time_wait = 0f;
-    [SerializeField] float time_idle = 2;
+    [SerializeField] private float time_wait = 0f;
+    [SerializeField] private float time_idle = 2;
 
     private CharacterController ch_controller;
 
-    public void Start() {
+    private void Start() {
         ch_controller = GetComponent<CharacterController>();
     }
 
-    public void Update() {
+    public void OnTick() {
         if (time_idle >= 0f) {
             if (time_wait <= 0f) {
                 time_wait = Random.Range(2, 5);
