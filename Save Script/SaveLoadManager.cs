@@ -10,14 +10,16 @@ using UnityEngine.SceneManagement;
 using System.Text;
 using TMPro;
 
-public class PropInfo : MonoBehaviour {
+public class PropInfo : MonoBehaviour
+{
     public Vector3 SelfGravityVector = new Vector3(0, -9.81f, 0);
     public bool CanDelete = true;
     public bool CanGravity = true;
     public bool HasSelfGravity = false;
 }
 
-public class SaveLoadManager : MonoBehaviour {
+public class SaveLoadManager : MonoBehaviour
+{
     [SerializeField] private string currentMapName = "NewMap";
     [SerializeField] private Transform propsParent;
     [SerializeField] private string resourcesFolder = "Props";
@@ -33,39 +35,55 @@ public class SaveLoadManager : MonoBehaviour {
 
     void Start() => Initialize();
 
-    private void Initialize() {
+    private void Initialize()
+    {
         saveDirectory = Path.Combine(Application.persistentDataPath, "Maps");
+
         if (!Directory.Exists(saveDirectory)) Directory.CreateDirectory(saveDirectory);
+        
         CacheAllPrefabs();
     }
 
-    private void CacheAllPrefabs() {
+    private void CacheAllPrefabs()
+    {
         GameObject[] prefabs = Resources.LoadAll<GameObject>(resourcesFolder);
-        foreach (var p in prefabs) {
-            if (short.TryParse(p.name, out short prefabId)) {
+
+        foreach (var p in prefabs)
+        {
+            if (short.TryParse(p.name, out short prefabId))
+            {
                 prefabCache[prefabId] = p;
-            } else {
+            }
+            else
+            {
                 Debug.LogWarning($"Failed to parse prefab ID from name: {p.name}");
             }
         }
     }
-    public void SaveCurrentMap() {
+
+    public void SaveCurrentMap()
+    {
         if (mapNameInput != null && !string.IsNullOrEmpty(mapNameInput.text)) currentMapName = mapNameInput.text;
+
         if (string.IsNullOrEmpty(currentMapName)) return;
         
         string fileName = $"{SceneManager.GetActiveScene().name}_{currentMapName.Replace(".mdm", "")}.mdm";
         string filePath = Path.Combine(saveDirectory, fileName);
 
-        try {
-            using (FileStream fs = new FileStream(filePath, FileMode.Create)) {
-                using (Aes aes = Aes.Create()) {
+        try
+        {
+            using (FileStream fs = new FileStream(filePath, FileMode.Create))
+            {
+                using (Aes aes = Aes.Create())
+                {
                     aes.Key = Key;
                     aes.IV = IV;
 
                     using (ICryptoTransform encryptor = aes.CreateEncryptor())
                     using (CryptoStream cryptoStream = new CryptoStream(fs, encryptor, CryptoStreamMode.Write))
                     using (GZipStream gz = new GZipStream(cryptoStream, System.IO.Compression.CompressionLevel.Optimal))
-                    using (BinaryWriter writer = new BinaryWriter(gz, Encoding.UTF8)) {
+                    using (BinaryWriter writer = new BinaryWriter(gz, Encoding.UTF8))
+                    {
                         // writer.Write(SceneManager.GetActiveScene().name);
                         // writer.Write(currentMapName);
                         writer.Write("0.0.1");
@@ -73,15 +91,20 @@ public class SaveLoadManager : MonoBehaviour {
                         writer.Write((short)0);
 
                         int processed = 0;
-                        foreach (Transform child in propsParent) {
+
+                        foreach (Transform child in propsParent)
+                        {
                             GameObject obj = child.gameObject;
                             if (obj == null) continue;
                                         
                             string cleanName = obj.name.Replace("(Clone)", "").Trim();
-                            if (!short.TryParse(cleanName, out short prefabId)) {
+
+                            if (!short.TryParse(cleanName, out short prefabId))
+                            {
                                 Debug.LogWarning($"Failed to parse prefab ID from object name: {obj.name}, skipping...");
                                 continue;
                             }
+
                             writer.Write(prefabId);
 
                             writer.Write(obj.transform.position.x);
@@ -97,14 +120,18 @@ public class SaveLoadManager : MonoBehaviour {
                             writer.Write(obj.transform.localScale.z);
 
                             PropInfo info = obj.GetComponent<PropInfo>();
-                            if (info != null) {
+
+                            if (info != null)
+                            {
                                 writer.Write(info.SelfGravityVector.x);
                                 writer.Write(info.SelfGravityVector.y);
                                 writer.Write(info.SelfGravityVector.z);
                                 writer.Write(info.CanDelete);
                                 writer.Write(info.CanGravity);
                                 writer.Write(info.HasSelfGravity);
-                            } else {
+                            }
+                            else
+                            {
                                 writer.Write(0f);
                                 writer.Write(-9.81f);
                                 writer.Write(0f);
@@ -125,27 +152,32 @@ public class SaveLoadManager : MonoBehaviour {
                         writer.Flush();
                         gz.Flush();
                         
-                        Debug.Log($"[Save] Успешно зашифровано объектов: {processed}. Путь: {filePath}");
+                        Debug.Log($"[Save] Sucsessfully: {processed}. Путь: {filePath}");
                     }
                 }
             }
         }
-        catch (Exception e) {
+        catch (Exception e)
+        {
             Debug.LogError($"Save Error: {e.Message}");
         }
     }
 
-    public void LoadMap(string mapFileName) {
+    public void LoadMap(string mapFileName)
+    {
         if (string.IsNullOrEmpty(mapFileName)) return;
         
         string fileName = $"{SceneManager.GetActiveScene().name}_{mapFileName.Replace(".mdm", "")}.mdm";
+
         LoadMapAsync(fileName).Forget();
     }
     
-    private async UniTaskVoid LoadMapAsync(string mapFileName) {
+    private async UniTaskVoid LoadMapAsync(string mapFileName)
+    {
         string filePath = Path.Combine(saveDirectory, mapFileName);
         
-        if (!File.Exists(filePath)) {
+        if (!File.Exists(filePath))
+        {
             Debug.LogError($"File Didn't Exist: {filePath}");
             return;
         }
@@ -153,10 +185,12 @@ public class SaveLoadManager : MonoBehaviour {
         ClearAllProps();
         List<PropMeta> allData = new List<PropMeta>();
 
-        try {
+        try
+        {
             await UniTask.SwitchToThreadPool();
             
-            using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read)) {
+            using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            {
                 using (Aes aes = Aes.Create()) {
                     aes.Key = Key;
                     aes.IV = IV;
@@ -196,16 +230,21 @@ public class SaveLoadManager : MonoBehaviour {
             
             await UniTask.SwitchToMainThread();
         }
-        catch (Exception e) {
+        catch (Exception e)
+        {
             Debug.LogError($"File Load/Decrypt Error: {e.Message}");
             return;
         }
 
         loadProgress = 0f;
         int loaded = 0;
-        while (loaded < allData.Count) {
+
+        while (loaded < allData.Count)
+        {
             int batchCount = Mathf.Min(loadBatchSize, allData.Count - loaded);
-            for (int i = 0; i < batchCount; i++) {
+
+            for (int i = 0; i < batchCount; i++)
+            {
                 CreatePropFromData(allData[loaded]);
                 loaded++;
             }
@@ -217,8 +256,10 @@ public class SaveLoadManager : MonoBehaviour {
         Debug.Log($"Successfully decrypted and loaded: {propsParent.childCount} objects");
     }
 
-    public GameObject CreateNewProp(short _prefabName, Vector3 _pos, Quaternion _rot) {
-        if (!prefabCache.TryGetValue(_prefabName, out GameObject prefab)) {
+    public GameObject CreateNewProp(short _prefabName, Vector3 _pos, Quaternion _rot)
+    {
+        if (!prefabCache.TryGetValue(_prefabName, out GameObject prefab))
+        {
             prefab = Resources.Load<GameObject>($"{resourcesFolder}/{_prefabName.ToString()}");
             if (prefab == null) return null;
             prefabCache[_prefabName] = prefab;
@@ -230,10 +271,12 @@ public class SaveLoadManager : MonoBehaviour {
         PropInfo info = obj.AddComponent<PropInfo>();
 
         RemoveBuildComponent(obj);
+
         return obj;
     }
 
-    private void CreatePropFromData(PropMeta data) {
+    private void CreatePropFromData(PropMeta data)
+    {
         if (!prefabCache.TryGetValue(data.PrefabName, out GameObject prefab)) return;
         
         GameObject obj = Instantiate(prefab, propsParent);
@@ -247,8 +290,11 @@ public class SaveLoadManager : MonoBehaviour {
         
         RemoveBuildComponent(obj);
     }
-    public void EditProp(GameObject obj, PropMeta editData) {
-        if (obj == null || !IsPropContains(obj)) {
+
+    public void EditProp(GameObject obj, PropMeta editData)
+    {
+        if (obj == null || !IsPropContains(obj))
+        {
             Debug.LogWarning("No Needed GO");
             return;
         }
@@ -257,13 +303,16 @@ public class SaveLoadManager : MonoBehaviour {
         obj.transform.eulerAngles = editData.Rotation;
         obj.transform.localScale = editData.Scale;
 
-        if (obj.TryGetComponent<Rigidbody>(out Rigidbody rb)) {
+        if (obj.TryGetComponent<Rigidbody>(out Rigidbody rb))
+        {
             rb.isKinematic = editData.IsKinematic;
             rb.useGravity = editData.HasGravity;
         }
 
         PropInfo info = obj.GetComponent<PropInfo>();
-        if (info != null) {
+
+        if (info != null)
+        {
             info.SelfGravityVector = editData.SelfGravityVector;
             info.CanDelete = editData.CanDelete;
             info.CanGravity = editData.CanGravity;
@@ -273,29 +322,36 @@ public class SaveLoadManager : MonoBehaviour {
         Debug.Log($"GO {obj.name} Edited");
     }
 
-    public PropMeta GetCurrentPropData(GameObject obj) {
+    public PropMeta GetCurrentPropData(GameObject obj)
+    {
         if (obj == null || !IsPropContains(obj)) return null;
 
         string cleanName = obj.name.Replace("(Clone)", "").Trim();
-        if (!short.TryParse(cleanName, out short prefabId)) {
+
+        if (!short.TryParse(cleanName, out short prefabId))
+        {
             Debug.LogWarning($"Failed to parse prefab ID from object name: {obj.name}");
             return null;
         }
 
-        PropMeta data = new PropMeta {
+        PropMeta data = new PropMeta
+        {
             PrefabName = prefabId,
             Position = obj.transform.position,
             Rotation = obj.transform.eulerAngles,
             Scale = obj.transform.localScale
         };
 
-        if (obj.TryGetComponent<Rigidbody>(out Rigidbody rb)) {
+        if (obj.TryGetComponent<Rigidbody>(out Rigidbody rb))
+        {
             data.IsKinematic = rb.isKinematic;
             data.HasGravity = rb.useGravity;
         }
 
         PropInfo info = obj.GetComponent<PropInfo>();
-        if (info != null) {
+
+        if (info != null)
+        {
             data.SelfGravityVector = info.SelfGravityVector;
             data.CanDelete = info.CanDelete;
             data.CanGravity = info.CanGravity;
@@ -305,19 +361,25 @@ public class SaveLoadManager : MonoBehaviour {
         return data;
     }
 
-    public void RemoveProp(GameObject obj) {
-        if (obj != null && obj.transform.parent == propsParent) {
+    public void RemoveProp(GameObject obj)
+    {
+        if (obj != null && obj.transform.parent == propsParent)
+        {
             Destroy(obj);
         }
     }
-    public void ClearAllProps() {
-        while (propsParent.childCount > 0) {
+    
+    public void ClearAllProps()
+    {
+        while (propsParent.childCount > 0)
+        {
             DestroyImmediate(propsParent.GetChild(0).gameObject);
         }
     }
 
-    private void RemoveBuildComponent(GameObject obj) {
-        if (obj.TryGetComponent<BuildPrefab>(out BuildPrefab bp)) Destroy(bp);
+    private void RemoveBuildComponent(GameObject obj)
+    {
+        if (obj.TryGetComponent<BuildPrefab>(out BuildPrefab bp)) return; // Destroy(bp);
     }
 
     public bool IsPropContains(GameObject obj) => obj != null && obj.transform.parent == propsParent;

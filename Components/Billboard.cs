@@ -14,6 +14,6 @@ public class Billboard : MonoBehaviour
 
     private void LateUpdate()
     {
-        _transform.LookAt(point, VECTOR_UP);
+        _transform?.LookAt(point, VECTOR_UP);
     }
 }

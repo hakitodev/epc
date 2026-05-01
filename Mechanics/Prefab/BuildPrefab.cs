@@ -1,50 +1,64 @@
 using System.Collections;
-// using System.Numerics;
 using UnityEngine;
 
 public class BuildPrefab : MonoBehaviour 
 {
-    private Collider[] colliders;
-    private Renderer[] renderers;
-    private Material[] materials;
-    [SerializeField] private  Material canM;
-    // [SerializeField] private Vector3 ppos;
-    // [SerializeField] private Vector3 prot;
-    // public Vector3 PlusPos => ppos;
-    // public Vector3 PlusRot => prot;
-
-    public bool Place(Vector3 _pos, Vector3 _rot)
-    {
-        transform.position = _pos;
-        transform.localEulerAngles = _rot;
-        
-        for (int i = 0; i < colliders.Length; i++)
-        {
-            colliders[i].enabled = true;
-        }
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            renderers[i].material = materials[i];
-        }
-        
-        Destroy(this);
-        return true;
-    }
+    private Collider[] _colliders;
+    private Renderer[] _renderers;
+    private Material[] _materials;
+    [SerializeField] 
+    private static Material _canMaterial;
 
     private void Start()
     {
-        colliders = GetComponentsInChildren<Collider>();
-        renderers = GetComponentsInChildren<Renderer>();
+        _colliders = GetComponentsInChildren<Collider>();
+        _renderers = GetComponentsInChildren<Renderer>();
         
-        materials = new Material[renderers.Length];
-        for (int i = 0; i < renderers.Length; i++)
+        _materials = new Material[_renderers.Length];
+
+        for (int i = 0; i < _renderers.Length; i++)
         {
-            materials[i] = renderers[i].material;
-            renderers[i].material = canM;
+            _materials[i] = _renderers[i].material;
+            _renderers[i].material = _canMaterial;
         }
-        for (int i = 0; i < colliders.Length; i++)
+
+        foreach (var collider in _colliders)
         {
-            colliders[i].enabled = false;
+            collider.enabled = false;
         }
+
+        // for (int i = 0; i < _colliders.Length; i++)
+        // {
+        //     _colliders[i].enabled = false;
+        // }
+    }
+
+    public bool IsPlaced(Vector3 pos, Vector3 rot)
+    {
+        transform.position = pos;
+        transform.localEulerAngles = rot;
+        
+        foreach (var collider in _colliders)
+        {
+            collider.enabled = true;
+        }
+
+        // foreach (var renderer in _renderers)
+        // {
+        //     renderer.material = _materials[0];
+        // }
+        // for (int i = 0; i < _colliders.Length; i++)
+        // {
+        //     _colliders[i].enabled = true;
+        // }
+
+        for (int i = 0; i < _renderers.Length; i++)
+        {
+            _renderers[i].material = _materials[i];
+        }
+        
+        Destroy(this);
+
+        return true;
     }
 }
